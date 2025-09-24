@@ -13,9 +13,12 @@ import java.util.List;
 public class Main {
     public static final int VALID = 1;
     public static final int NOT_VALID = 0;
+    public static final int EMPTY = 0;
 
     public static void main(String[] args) {
         ElpriserAPI api = new ElpriserAPI();
+
+        boolean printPrices = true;
 
         ElpriserAPI.Prisklass zone = parseZone(args);
         LocalDate date = parseDate(args);
@@ -23,10 +26,7 @@ public class Main {
         List<ElpriserAPI.Elpris> tomorrowPrices = parseTomorrowPrices(api, zone);
 
 
-
-        boolean printPrices = true;
-
-        if (args.length == 0) {
+        if (args.length == EMPTY) {
             printHelp();
             printPrices = false;
         }
@@ -72,7 +72,7 @@ public class Main {
         int missingZone = NOT_VALID;
         int validZone = NOT_VALID;
 
-        if(args.length == 0){
+        if(args.length == EMPTY){
             missingZone = VALID;
             validZone = VALID;
         }
@@ -83,7 +83,7 @@ public class Main {
             }
             if(arg.equals("--help")){
                 missingZone = VALID;
-                validZone = VALID;;
+                validZone = VALID;
             }
         }
         if (missingZone == NOT_VALID){
@@ -110,7 +110,7 @@ public class Main {
     private static LocalDate parseDate(String[] args) {
         LocalDate date = LocalDate.now();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd");
-        String dateString = "";
+        String dateString;
 
         for (int i = 0; i < args.length; i++) {
             if (args[i].equals("--date")) {
@@ -190,7 +190,7 @@ public class Main {
         Double[] array =  new Double[prices.size()];
         for (int i = 0; i < prices.size(); i++) {
             array[i] = prices.get(i).sekPerKWh();
-        };
+        }
         Arrays.sort(array, Collections.reverseOrder());
         System.out.println(Arrays.toString(array));
         //todo: figure out how to keep index so print can include corresponding time instead of just prices.
@@ -199,17 +199,17 @@ public class Main {
     private static int optimalChargingWindow(List<ElpriserAPI.Elpris> prices, int duration) {
         double[] array =  new double[prices.size()];
         int index = prices.size();
-        int optimalChargingWindow = 0;
-        int currentChargingWindow = optimalChargingWindow;
 
         for (int i = 0; i < prices.size(); i++) {
             array[i] = prices.get(i).sekPerKWh()*100;
-        };
+        }
 
+        int optimalChargingWindow = 0;
         for (int i = 0; i < duration; i++) {
             optimalChargingWindow += (int) array[i];
         }
 
+        int currentChargingWindow = optimalChargingWindow;
         for (int i = duration; i < index; i++) {
             currentChargingWindow += (int) (array[i] - array[index - duration]);
             optimalChargingWindow = Math.max(optimalChargingWindow, currentChargingWindow);
@@ -220,11 +220,12 @@ public class Main {
     }
 
     private static void printHelp(){
-        System.out.println("--zone SE1|SE2|SE3|SE4 (required) \n"
-        + "--date YYYY-MM-DD (optional, defaults to current date) will only work after 1pm\n"
-        + "--sorted (optional, to display prices in descending order)\n"
-        + "--charging 2h|4h|8h (optional, to find optimal charging windows)\n"
-        + "--help (optional, to display usage information");
+        System.out.println("""
+                --zone SE1|SE2|SE3|SE4 (required)
+                --date YYYY-MM-DD (optional, defaults to current date) will only work after 1pm
+                --sorted (optional, to display prices in descending order)
+                --charging 2h|4h|8h (optional, to find optimal charging windows)
+                --help (optional, to display usage information""");
     }
 
     private static void printPrices(List<ElpriserAPI.Elpris> prices) {
