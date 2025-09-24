@@ -7,7 +7,7 @@ import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 public class Main {
@@ -40,7 +40,7 @@ public class Main {
 
         for (String arg : args){
             if (arg.equals("--sorted")){
-                printSorted(todayPrices);
+
             }
         }
 
@@ -53,6 +53,8 @@ public class Main {
             } else
                 printPrices(todayPrices);
         }
+
+        sortedPrices(todayPrices);
     }
 
     private static List<ElpriserAPI.Elpris> parseTomorrowPrices(ElpriserAPI api, ElpriserAPI.Prisklass zone) {
@@ -187,12 +189,20 @@ public class Main {
     }
 
     private static void sortedPrices(List<ElpriserAPI.Elpris> prices) {
-        Double[] array =  new Double[prices.size()];
+
+        SortedPrices[] sortedPrices = new SortedPrices[prices.size()];
+
         for (int i = 0; i < prices.size(); i++) {
-            array[i] = prices.get(i).sekPerKWh();
+            double price = prices.get(i).sekPerKWh();
+            sortedPrices[i]= new SortedPrices(price, i);
         }
-        Arrays.sort(array, Collections.reverseOrder());
-        System.out.println(Arrays.toString(array));
+
+        Comparator<SortedPrices> comparator = Comparator.comparing(SortedPrices::prices, Comparator.reverseOrder());
+        Arrays.sort(sortedPrices, comparator);
+        System.out.print("[");
+        printSortedPrices(prices, sortedPrices);
+
+
         //todo: figure out how to keep index so print can include corresponding time instead of just prices.
     }
 
@@ -219,6 +229,29 @@ public class Main {
         //todo: figure out how to how to apply to finding optimal charging window.
     }
 
+    private static void printSortedPrices(List<ElpriserAPI.Elpris> prices, SortedPrices[] sortedPrices) {
+        for (int i = 0; i < sortedPrices.length; i++) {
+            int index = sortedPrices[i].index();
+            int start = prices.get(index).timeStart().getHour();
+            int end = prices.get(index).timeEnd().getHour();
+            int lineBreak = i+1;
+            String stringFormat = String.format("%02d-%02d", start, end);
+
+            System.out.printf("%s %2.2f öre",
+                    stringFormat,
+                    sortedPrices[i].prices()*100);
+
+            if (i < sortedPrices.length - 1) {
+                System.out.print(", \n");
+            }
+//            if (lineBreak %4 == 0 && i < sortedPrices.length - 1) {
+//                System.out.println();
+//            }
+        }
+        System.out.print("]");
+        System.out.println();
+    }
+
     private static void printHelp(){
         System.out.println("""
                 --zone SE1|SE2|SE3|SE4 (required)
@@ -229,19 +262,31 @@ public class Main {
     }
 
     private static void printPrices(List<ElpriserAPI.Elpris> prices) {
+        int expensiveStart = prices.get(mostExpensiveHour(prices)).timeStart().getHour();
+        int expensiveEnd = prices.get(mostExpensiveHour(prices)).timeEnd().getHour();
+        int cheapStart = prices.get(leastExpensiveHour(prices)).timeStart().getHour();
+        int cheapEnd = prices.get(leastExpensiveHour(prices)).timeEnd().getHour();
 
-        System.out.printf("Högsta pris: %s, Price: %4f SEK/kWh\n",
-                prices.get(mostExpensiveHour(prices)).timeStart().toLocalTime(), prices.get(mostExpensiveHour(prices)).sekPerKWh());
-        System.out.printf("Lägsta pris: %s, Price: %4f SEK/kWh\n",
-                prices.get(leastExpensiveHour(prices)).timeStart().toLocalTime(), prices.get(leastExpensiveHour(prices)).sekPerKWh());
-        System.out.printf("Medelpris: %4f SEK/kwh\n", meanPrice(prices));
-    }
-
-    private static void printSorted(List<ElpriserAPI.Elpris> prices) {
-        sortedPrices(prices);
+        System.out.printf("Högsta pris: %s, Price: %.2f öre/kWh\n",
+                timeFormat(expensiveStart, expensiveEnd),
+                prices.get(mostExpensiveHour(prices)).sekPerKWh()*100);
+        System.out.printf("Lägsta pris: %s, Price: %.2f öre/kWh\n",
+                timeFormat(cheapStart, cheapEnd),
+                prices.get(leastExpensiveHour(prices)).sekPerKWh()*100);
+        System.out.printf("Medelpris: %.2f öre/kwh\n", meanPrice(prices)*100);
     }
 
     private static void printChargingWindow(){
 
     }
+    
+    private static String timeFormat(int start, int end){
+        return String.format("%02d-%02d", start, end);
+    }
 }
+
+
+record SortedPrices(
+        double prices,
+        int index
+){}
