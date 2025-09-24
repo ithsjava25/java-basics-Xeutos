@@ -5,6 +5,8 @@ import com.example.api.ElpriserAPI;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 public class Main {
@@ -13,16 +15,21 @@ public class Main {
 
         ElpriserAPI.Prisklass zone = parseZone(args);
         LocalDate date = parseDate(args);
-
-
-
-
         List<ElpriserAPI.Elpris> todayPrices = api.getPriser(date, zone);
 
-        System.out.println(cheapestHour(todayPrices));
-        System.out.println(mostExpensiveHour(todayPrices));
-        System.out.println(meanPrice(todayPrices));
-        System.out.println(todayPrices);
+        for (String arg : args){
+            if  (arg.equals("--help")){
+                printHelp();
+            }
+        }
+
+        for (String arg : args){
+            if (arg.equals("--sorted")){
+                sortedPrices(todayPrices);
+            }
+        }
+
+        printPrices(todayPrices);
 
     }
 
@@ -31,6 +38,7 @@ public class Main {
         if (args.length < 2) {
             throw new IllegalArgumentException("Invalid arguments");
         }
+
         for (int i = 0; i < args.length; i++) {
             if  (args[i].equals("--zone")) {
                 if (args[i+1].equals("SE1")) {zone = ElpriserAPI.Prisklass.SE1;}
@@ -69,7 +77,7 @@ public class Main {
         return sum/prices.size();
     }
 
-    private static int cheapestHour(List<ElpriserAPI.Elpris> prices) {
+    private static int mostExpensiveHour(List<ElpriserAPI.Elpris> prices) {
         double largest = prices.getFirst().sekPerKWh();
         int index = 0;
 
@@ -88,7 +96,7 @@ public class Main {
         return index;
     }
 
-    private static int mostExpensiveHour(List<ElpriserAPI.Elpris> prices) {
+    private static int leastExpensiveHour(List<ElpriserAPI.Elpris> prices) {
         double smallest = prices.getFirst().sekPerKWh();
         int index = 0;
 
@@ -107,21 +115,34 @@ public class Main {
         return index;
     }
 
+    private static void sortedPrices(List<ElpriserAPI.Elpris> prices) {
+        Double[] array =  new Double[prices.size()];
+        for (int i = 0; i < prices.size(); i++) {
+            array[i] = prices.get(i).sekPerKWh();
+        };
+        Arrays.sort(array, Collections.reverseOrder());
+        System.out.println(Arrays.toString(array));
+    }
 
-//    private static int optimalChargingWindow(int duration, int chargingWindow, List<ElpriserAPI.Elpris> prices) {
-//        double[] window = new double[prices.size()];
-//        for (int i = 0; i < prices.size(); i++) {
-//            window[i] = prices.get(i).sekPerKWh();
-//        }
-//
-//        for (int i = 0; i < prices.size() - chargingWindow; i++) {
-//            int currentSum = 0;
-//            for (int j = 0; j < chargingWindow; j++) {
-//                currentSum = currentSum + window[i+j];
-//            }
-//        }
-//
-//        return -1;
-//    }
 
+    private static int optimalChargingWindow() {
+        return 0;
+    }
+
+    private static void printHelp(){
+        System.out.println("--zone SE1|SE2|SE3|SE4 (required) \n"
+        + "--date YYYY-MM-DD (optional, defaults to current date) will only work after 1pm\n"
+        + "--sorted (optional, to display prices in descending order)\n"
+        + "--charging 2h|4h|8h (optional, to find optimal charging windows)\n"
+        + "--help (optional, to display usage information");
+    }
+
+    private static void printPrices(List<ElpriserAPI.Elpris> prices) {
+
+        System.out.printf("Most expensive: %s, Price: %4f SEK/kWh\n",
+                prices.get(mostExpensiveHour(prices)).timeStart().toLocalTime(), prices.get(mostExpensiveHour(prices)).sekPerKWh());
+        System.out.printf("Least expensive: %s, Price: %4f SEK/kWh\n",
+                prices.get(leastExpensiveHour(prices)).timeStart().toLocalTime(), prices.get(leastExpensiveHour(prices)).sekPerKWh());
+        System.out.printf("Medelpris: %4f SEK/kwh\n", meanPrice(prices));
+    }
 }
