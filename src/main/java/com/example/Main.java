@@ -3,6 +3,7 @@ package com.example;
 import com.example.api.ElpriserAPI;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
@@ -19,6 +20,10 @@ public class Main {
         ElpriserAPI.Prisklass zone = parseZone(args);
         LocalDate date = parseDate(args);
         List<ElpriserAPI.Elpris> todayPrices = api.getPriser(date, zone);
+        List<ElpriserAPI.Elpris> tomorrowPrices = parseTomorrowPrices(api, zone);
+
+
+
         boolean printPrices = true;
 
         if (args.length == 0) {
@@ -48,6 +53,18 @@ public class Main {
             } else
                 printPrices(todayPrices);
         }
+    }
+
+    private static List<ElpriserAPI.Elpris> parseTomorrowPrices(ElpriserAPI api, ElpriserAPI.Prisklass zone) {
+        LocalTime now = LocalTime.now();
+        LocalTime cutoff = LocalTime.of(13, 0);
+
+        if (now.isBefore(cutoff)) {
+            LocalDate today = LocalDate.now();
+            LocalDate tomorrow = today.plusDays(1);
+            return api.getPriser(tomorrow, zone);
+        }
+        return null;
     }
 
     private static ElpriserAPI.Prisklass parseZone(String[] args) {
