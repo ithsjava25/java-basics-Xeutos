@@ -10,43 +10,83 @@ import java.util.Collections;
 import java.util.List;
 
 public class Main {
+    public static final int VALID = 1;
+    public static final int NOT_VALID = 0;
+
     public static void main(String[] args) {
         ElpriserAPI api = new ElpriserAPI();
 
         ElpriserAPI.Prisklass zone = parseZone(args);
         LocalDate date = parseDate(args);
         List<ElpriserAPI.Elpris> todayPrices = api.getPriser(date, zone);
+        boolean printPrices = true;
+
+        if (args.length == 0) {
+            printHelp();
+            printPrices = false;
+        }
 
         for (String arg : args){
             if  (arg.equals("--help")){
                 printHelp();
+                printPrices = false;
             }
         }
 
         for (String arg : args){
             if (arg.equals("--sorted")){
-                sortedPrices(todayPrices);
+                printSorted(todayPrices);
             }
         }
 
-        printPrices(todayPrices);
+        parseCharging(args, todayPrices);
 
+        if (printPrices) {
+            if (todayPrices.isEmpty()){
+                System.out.println("No data");
+
+            } else
+                printPrices(todayPrices);
+        }
     }
 
     private static ElpriserAPI.Prisklass parseZone(String[] args) {
         ElpriserAPI.Prisklass zone = ElpriserAPI.Prisklass.SE1;
-        if (args.length < 2) {
-            throw new IllegalArgumentException("Invalid arguments");
+        int missingZone = NOT_VALID;
+        int validZone = NOT_VALID;
+
+        if(args.length == 0){
+            missingZone = VALID;
+            validZone = VALID;
+        }
+
+        for (String arg : args){
+            if(arg.equals("--zone")){
+                missingZone = VALID;
+            }
+            if(arg.equals("--help")){
+                missingZone = VALID;
+                validZone = VALID;;
+            }
+        }
+        if (missingZone == NOT_VALID){
+            System.out.println("zone required");
+//            throw new IllegalArgumentException("Zone required");
         }
 
         for (int i = 0; i < args.length; i++) {
             if  (args[i].equals("--zone")) {
-                if (args[i+1].equals("SE1")) {zone = ElpriserAPI.Prisklass.SE1;}
-                if (args[i+1].equals("SE2")) {zone = ElpriserAPI.Prisklass.SE2;}
-                if (args[i+1].equals("SE3")) {zone = ElpriserAPI.Prisklass.SE3;}
-                if (args[i+1].equals("SE4")) {zone = ElpriserAPI.Prisklass.SE4;}
+                if (args[i+1].equals("SE1")) {zone = ElpriserAPI.Prisklass.SE1; validZone = VALID;}
+                if (args[i+1].equals("SE2")) {zone = ElpriserAPI.Prisklass.SE2; validZone = VALID;}
+                if (args[i+1].equals("SE3")) {zone = ElpriserAPI.Prisklass.SE3; validZone = VALID;}
+                if (args[i+1].equals("SE4")) {zone = ElpriserAPI.Prisklass.SE4; validZone = VALID;}
                 }
             }
+
+        if (validZone == NOT_VALID) {
+            System.out.println("Invalid zone");
+        }
+
         return zone;
     }
 
@@ -61,13 +101,27 @@ public class Main {
                 try {
                     date = LocalDate.parse(dateString, formatter);
                 } catch (DateTimeParseException e) {
-                    throw new IllegalArgumentException("Invalid date format. Use yyyy-MM-dd");
+                    System.out.println("Invalid date");
                 }
             }
         }
         return date;
     }
 
+    private static void parseCharging(String[] args, List<ElpriserAPI.Elpris> prices) {
+        int validWindow = NOT_VALID;
+        for (int i = 0; i < args.length; i++) {
+            if (args[i].equals("--charging")){
+                if (args[i+1].equals("2h")){optimalChargingWindow(prices, 2); validWindow = VALID;}
+                if (args[i+1].equals("4h")){optimalChargingWindow(prices, 4); validWindow = VALID;}
+                if (args[i+1].equals("8h")){optimalChargingWindow(prices, 8); validWindow = VALID;}
+                if (validWindow == 0)
+                    System.out.println("Invalid charging window");
+            }
+        }
+        if (validWindow == VALID)
+            printChargingWindow();
+    }
 
     private static double meanPrice(List<ElpriserAPI.Elpris> prices) {
         double sum = 0;
@@ -122,11 +176,30 @@ public class Main {
         };
         Arrays.sort(array, Collections.reverseOrder());
         System.out.println(Arrays.toString(array));
+        //todo: figure out how to keep index so print can include corresponding time instead of just prices.
     }
 
+    private static int optimalChargingWindow(List<ElpriserAPI.Elpris> prices, int duration) {
+        double[] array =  new double[prices.size()];
+        int index = prices.size();
+        int optimalChargingWindow = 0;
+        int currentChargingWindow = optimalChargingWindow;
 
-    private static int optimalChargingWindow() {
-        return 0;
+        for (int i = 0; i < prices.size(); i++) {
+            array[i] = prices.get(i).sekPerKWh()*100;
+        };
+
+        for (int i = 0; i < duration; i++) {
+            optimalChargingWindow += (int) array[i];
+        }
+
+        for (int i = duration; i < index; i++) {
+            currentChargingWindow += (int) (array[i] - array[index - duration]);
+            optimalChargingWindow = Math.max(optimalChargingWindow, currentChargingWindow);
+        }
+
+        return optimalChargingWindow;
+        //todo: figure out how to how to apply to finding optimal charging window.
     }
 
     private static void printHelp(){
@@ -139,10 +212,18 @@ public class Main {
 
     private static void printPrices(List<ElpriserAPI.Elpris> prices) {
 
-        System.out.printf("Most expensive: %s, Price: %4f SEK/kWh\n",
+        System.out.printf("Högsta pris: %s, Price: %4f SEK/kWh\n",
                 prices.get(mostExpensiveHour(prices)).timeStart().toLocalTime(), prices.get(mostExpensiveHour(prices)).sekPerKWh());
-        System.out.printf("Least expensive: %s, Price: %4f SEK/kWh\n",
+        System.out.printf("Lägsta pris: %s, Price: %4f SEK/kWh\n",
                 prices.get(leastExpensiveHour(prices)).timeStart().toLocalTime(), prices.get(leastExpensiveHour(prices)).sekPerKWh());
         System.out.printf("Medelpris: %4f SEK/kwh\n", meanPrice(prices));
+    }
+
+    private static void printSorted(List<ElpriserAPI.Elpris> prices) {
+        sortedPrices(prices);
+    }
+
+    private static void printChargingWindow(){
+
     }
 }
