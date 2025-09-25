@@ -47,6 +47,9 @@ public class Main {
             if (todayPrices.isEmpty()){
                 System.out.println("No data");
 
+            } else if (todayPrices.size() == 96) {
+                hourlyPrices(convertToHourlyPrices(todayPrices));
+                meanPrice(todayPrices);
             } else{
                 mostExpensiveHour(todayPrices);
                 leastExpensiveHour(todayPrices);
@@ -136,6 +139,56 @@ public class Main {
         }
     }
 
+    private static List<Double> convertToHourlyPrices(List<ElpriserAPI.Elpris> prices){
+        List<Double> hourlyPrices = new ArrayList<>();
+        int hourIndex = 0;
+
+        if (prices.size() == 96){
+            for (int i = 0; i < prices.size()/4; i++) {
+                double hourPrice = prices.get(hourIndex).sekPerKWh()+
+                        prices.get(hourIndex+1).sekPerKWh()+
+                        prices.get(hourIndex+2).sekPerKWh()+
+                        prices.get(hourIndex+3).sekPerKWh();
+                hourPrice = hourPrice/4;
+                hourlyPrices.add(hourPrice);
+                hourIndex += 4;
+            }
+        }
+        return hourlyPrices;
+    }
+
+    private static void hourlyPrices(List<Double> hourlyPrices) {
+        double largest = hourlyPrices.getFirst();
+        double smallest = hourlyPrices.getFirst();
+        int indexLarge = 0;
+        int indexSmallest = 0;
+
+        for (int i = 0; i < hourlyPrices.size(); i++) {
+            double priceLarge = hourlyPrices.get(i);
+
+            if (priceLarge == largest){
+                continue;
+            }
+            if (priceLarge > largest){
+                largest = priceLarge;
+                indexLarge = i;
+            }
+        }
+        for (int i = 0; i < hourlyPrices.size(); i++) {
+        double priceSmall = hourlyPrices.get(i);
+
+        if (priceSmall == smallest){
+            continue;
+        }
+        if (priceSmall < smallest){
+            smallest = priceSmall;
+            indexSmallest = i;
+        }
+    }
+        printPrice(largest,indexLarge,"Högsta");
+        printPrice(smallest,indexSmallest,"Lägsta");
+}
+
     private static void meanPrice(List<ElpriserAPI.Elpris> prices) {
         double sum = 0;
         for (ElpriserAPI.Elpris price : prices){
@@ -151,14 +204,14 @@ public class Main {
         int index = 0;
 
             for (int i = 1; i < prices.size(); i++) {
-                ElpriserAPI.Elpris price = prices.get(i);
+                double price = prices.get(i).sekPerKWh();
 
-                if (price.sekPerKWh() == largest) {
+                if (price == largest) {
                     continue;
                 }
 
-                if (price.sekPerKWh() > largest) {
-                    largest = price.sekPerKWh();
+                if (price > largest) {
+                    largest = price;
                     index = i;
                 }
             }
@@ -172,14 +225,14 @@ public class Main {
         int index = 0;
 
             for (int i = 1; i < prices.size(); i++) {
-                ElpriserAPI.Elpris price = prices.get(i);
+                double price = prices.get(i).sekPerKWh();
 
-                if (price.sekPerKWh() == smallest) {
+                if (price == smallest) {
                     continue;
                 }
 
-                if (smallest > price.sekPerKWh()) {
-                    smallest = price.sekPerKWh();
+                if (smallest > price) {
+                    smallest = price;
                     index = i;
                 }
             }
