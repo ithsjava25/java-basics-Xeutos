@@ -2,14 +2,13 @@ package com.example;
 
 import com.example.api.ElpriserAPI;
 
-import java.text.NumberFormat;
 import java.time.LocalDate;
-import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 
 public class Main {
     public static final int VALID = 1;
@@ -17,6 +16,7 @@ public class Main {
     public static final int EMPTY = 0;
 
     public static void main(String[] args) {
+        Locale.setDefault(Locale.of("sv", "SE"));
         ElpriserAPI api = new ElpriserAPI();
 
         boolean printPrices = true;
@@ -148,18 +148,19 @@ public class Main {
         double largest = prices.getFirst().sekPerKWh();
         int index = 0;
 
-        for (int i = 1; i < prices.size(); i++) {
-            ElpriserAPI.Elpris price = prices.get(i);
+            for (int i = 1; i < prices.size(); i++) {
+                ElpriserAPI.Elpris price = prices.get(i);
 
-            if (price.sekPerKWh() == largest) {
-                continue;
+                if (price.sekPerKWh() == largest) {
+                    continue;
+                }
+
+                if (price.sekPerKWh() > largest) {
+                    largest = price.sekPerKWh();
+                    index = i;
+                }
             }
 
-            if (price.sekPerKWh() > largest ) {
-                largest = price.sekPerKWh();
-                index = i;
-            }
-        }
         return index;
         //todo handle hourly max when api is updated for every quarter hour. on 1/10/25
     }
@@ -168,34 +169,26 @@ public class Main {
         double smallest = prices.getFirst().sekPerKWh();
         int index = 0;
 
-        for (int i = 1; i < prices.size(); i++) {
-            ElpriserAPI.Elpris price = prices.get(i);
+            for (int i = 1; i < prices.size(); i++) {
+                ElpriserAPI.Elpris price = prices.get(i);
 
-            if  (price.sekPerKWh() == smallest ) {
-                continue;
+                if (price.sekPerKWh() == smallest) {
+                    continue;
+                }
+
+                if (smallest > price.sekPerKWh()) {
+                    smallest = price.sekPerKWh();
+                    index = i;
+                }
             }
 
-            if (smallest > price.sekPerKWh() ) {
-                smallest = price.sekPerKWh();
-                index = i;
-            }
-        }
         return index;
         //todo handle hourly min when api is updated for every quarter hour. on 1/10/25
     }
 
     private static void sortedPrices(List<ElpriserAPI.Elpris> prices, List<ElpriserAPI.Elpris> tomorrowPrices ) {
-
-        SortedPrices[] sortedPrices;
-        if (tomorrowPrices.isEmpty()) {
-            sortedPrices = new SortedPrices[prices.size()];
-        } else {
-            sortedPrices = new SortedPrices[prices.size()*2];
-            for (int i = 0; i < tomorrowPrices.size(); i++) {
-                double price = tomorrowPrices.get(i).sekPerKWh();
-                sortedPrices[i+prices.size()]= new SortedPrices(price, i);
-            }
-        }
+        prices.addAll(tomorrowPrices);
+        SortedPrices[] sortedPrices =  new SortedPrices[prices.size()];
 
 
         for (int i = 0; i < prices.size(); i++) {
@@ -207,8 +200,6 @@ public class Main {
         Comparator<SortedPrices> comparator = Comparator.comparing(SortedPrices::prices, Comparator.reverseOrder()).thenComparing(SortedPrices::index);
         Arrays.sort(sortedPrices, comparator);
         printSortedPrices(prices, sortedPrices);
-
-        //todo: figure out how to keep index so print can include corresponding time instead of just prices.
     }
 
     private static void optimalChargingWindow(List<ElpriserAPI.Elpris> prices, List<ElpriserAPI.Elpris> tomorrowPrices, int duration) {
@@ -216,26 +207,14 @@ public class Main {
             System.out.println("no data");
             return;
          }
-
-        double[] array =  new double[prices.size()*2];
-         int size = prices.size();
-        int index = prices.size()*2-1;
+        prices.addAll(tomorrowPrices);
+        double[] array =  new double[prices.size()];
+        int index = prices.size();
         int priceIndex = 0;
 
         for (int i = 0; i < prices.size(); i++) {
             array[i] = prices.get(i).sekPerKWh();
-        }   
-
-        if (tomorrowPrices.isEmpty()) {
-            for (int i = 0; i < size ; i++) {
-                array[i+size] = 100;
-            }
-        } else {
-            for (int i = 0; i < size ; i++) {
-                array[i+size] = tomorrowPrices.get(i).sekPerKWh();
-            }
         }
-        
 
         double minSum = 0;
         for (int i = 0; i < duration; i++) {
@@ -243,8 +222,8 @@ public class Main {
         }
 
         double windowSum = minSum;
-        for (int i = 1; i < index; i++) {
-            windowSum += array[i+duration-1] - array[i - 1];
+        for (int i = 0; i < index-duration; i++) {
+            windowSum += array[i+duration] - array[i];
 
             if (minSum > windowSum){
                 minSum = windowSum;
@@ -253,24 +232,22 @@ public class Main {
         }
 
         minSum = minSum / duration;
-        minSum = minSum * 1000;
+        minSum = minSum * 10000;
         minSum = Math.round(minSum);
-        minSum = minSum / 10;
+        minSum = minSum / 100;
         printChargingWindow(prices, priceIndex, minSum);
-
-        //todo: figure out how to how to apply to finding optimal charging window.
     }
 
     private static void printSortedPrices(List<ElpriserAPI.Elpris> prices, SortedPrices[] sortedPrices) {
-        for (int i = 0; i < sortedPrices.length; i++) {
-            int index = sortedPrices[i].index();
+        for (SortedPrices sortedPrice : sortedPrices) {
+            int index = sortedPrice.index();
             int start = prices.get(index).timeStart().getHour();
             int end = prices.get(index).timeEnd().getHour();
             String stringFormat = String.format("%02d-%02d", start, end);
 
-            System.out.printf("%s %2.2f öre\n",
+            System.out.printf("%s %2.2f öre%n",
                     stringFormat,
-                    sortedPrices[i].prices()*100);
+                    sortedPrice.prices() * 100);
         }
     }
 
@@ -285,22 +262,23 @@ public class Main {
 
     private static void printPrices(List<ElpriserAPI.Elpris> prices) {
         int expensiveStart = prices.get(mostExpensiveHour(prices)).timeStart().getHour();
-        int expensiveEnd = prices.get(mostExpensiveHour(prices)).timeEnd().getHour();
         int cheapStart = prices.get(leastExpensiveHour(prices)).timeStart().getHour();
+
+        int expensiveEnd = prices.get(mostExpensiveHour(prices)).timeEnd().getHour();
         int cheapEnd = prices.get(leastExpensiveHour(prices)).timeEnd().getHour();
 
-        System.out.printf("Högsta pris: %s, Price: %.2f öre/kWh\n",
+        System.out.printf("Högsta pris: %s, Price: %.2f öre/kWh%n",
                 timeFormat(expensiveStart, expensiveEnd),
                 prices.get(mostExpensiveHour(prices)).sekPerKWh()*100);
-        System.out.printf("Lägsta pris: %s, Price: %.2f öre/kWh\n",
+        System.out.printf("Lägsta pris: %s, Price: %.2f öre/kWh%n",
                 timeFormat(cheapStart, cheapEnd),
                 prices.get(leastExpensiveHour(prices)).sekPerKWh()*100);
-        System.out.printf("Medelpris: %.2f öre/kwh\n", meanPrice(prices)*100);
+        System.out.printf("Medelpris: %.2f öre/kwh%n", meanPrice(prices)*100);
     }
 
     private static void printChargingWindow(List<ElpriserAPI.Elpris> prices, int index, double meanPrice) {
-        System.out.println("Påbörja laddning: "+ prices.get(index).timeStart().toLocalTime());
-        System.out.printf("Medelpris: %2.1f", meanPrice);
+        System.out.println("Påbörja laddning: kl "+ prices.get(index).timeStart().toLocalTime());
+        System.out.printf("Medelpris för fönster: %2.2f öre%n", meanPrice);
     }
     
     private static String timeFormat(int start, int end){
@@ -309,7 +287,4 @@ public class Main {
 }
 
 
-record SortedPrices(
-        double prices,
-        int index
-){}
+record SortedPrices(double prices, int index){}
