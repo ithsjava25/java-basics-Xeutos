@@ -5,10 +5,7 @@ import com.example.api.ElpriserAPI;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Locale;
+import java.util.*;
 
 public class Main {
     public static final int VALID = 1;
@@ -50,8 +47,11 @@ public class Main {
             if (todayPrices.isEmpty()){
                 System.out.println("No data");
 
-            } else
-                printPrices(todayPrices);
+            } else{
+                mostExpensiveHour(todayPrices);
+                leastExpensiveHour(todayPrices);
+                meanPrice(todayPrices);
+                }
         }
     }
 
@@ -136,15 +136,17 @@ public class Main {
         }
     }
 
-    private static double meanPrice(List<ElpriserAPI.Elpris> prices) {
+    private static void meanPrice(List<ElpriserAPI.Elpris> prices) {
         double sum = 0;
         for (ElpriserAPI.Elpris price : prices){
             sum += price.sekPerKWh();
         }
-        return sum/prices.size();
+        sum = sum/prices.size();
+        System.out.printf("Medelpris: %.2f öre/kwh%n", sum*100);
+        //return sum/prices.size();
     }
 
-    private static int mostExpensiveHour(List<ElpriserAPI.Elpris> prices) {
+    private static void mostExpensiveHour(List<ElpriserAPI.Elpris> prices) {
         double largest = prices.getFirst().sekPerKWh();
         int index = 0;
 
@@ -160,12 +162,12 @@ public class Main {
                     index = i;
                 }
             }
-
-        return index;
+        printPrice(largest,index,"Högsta");
+        //return index;
         //todo handle hourly max when api is updated for every quarter hour. on 1/10/25
     }
 
-    private static int leastExpensiveHour(List<ElpriserAPI.Elpris> prices) {
+    private static void leastExpensiveHour(List<ElpriserAPI.Elpris> prices) {
         double smallest = prices.getFirst().sekPerKWh();
         int index = 0;
 
@@ -181,8 +183,8 @@ public class Main {
                     index = i;
                 }
             }
-
-        return index;
+        printPrice(smallest,index,"Lägsta");
+        //return index;
         //todo handle hourly min when api is updated for every quarter hour. on 1/10/25
     }
 
@@ -260,31 +262,24 @@ public class Main {
                 --help (optional, to display usage information""");
     }
 
-    private static void printPrices(List<ElpriserAPI.Elpris> prices) {
-        int expensiveStart = prices.get(mostExpensiveHour(prices)).timeStart().getHour();
-        int cheapStart = prices.get(leastExpensiveHour(prices)).timeStart().getHour();
+    private static void printPrice(double price, int index,String type){
+        List<Integer> startHour = Arrays.asList(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23);
+        List<Integer> endHour = Arrays.asList(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 0);
 
-        int expensiveEnd = prices.get(mostExpensiveHour(prices)).timeEnd().getHour();
-        int cheapEnd = prices.get(leastExpensiveHour(prices)).timeEnd().getHour();
-
-        System.out.printf("Högsta pris: %s, Price: %.2f öre/kWh%n",
-                timeFormat(expensiveStart, expensiveEnd),
-                prices.get(mostExpensiveHour(prices)).sekPerKWh()*100);
-        System.out.printf("Lägsta pris: %s, Price: %.2f öre/kWh%n",
-                timeFormat(cheapStart, cheapEnd),
-                prices.get(leastExpensiveHour(prices)).sekPerKWh()*100);
-        System.out.printf("Medelpris: %.2f öre/kwh%n", meanPrice(prices)*100);
+        System.out.printf("%s pris: %s, Price: %.2f öre/kWh%n",
+                type, timeFormat(startHour.get(index),endHour.get(index)), price*100);
     }
 
     private static void printChargingWindow(List<ElpriserAPI.Elpris> prices, int index, double meanPrice) {
-        System.out.println("Påbörja laddning: kl "+ prices.get(index).timeStart().toLocalTime());
+        System.out.println("Påbörja laddning: kl " + prices.get(index).timeStart().toLocalTime());
         System.out.printf("Medelpris för fönster: %2.2f öre%n", meanPrice);
     }
-    
-    private static String timeFormat(int start, int end){
+
+    private static String timeFormat(int start, int end) {
         return String.format("%02d-%02d", start, end);
     }
 }
 
 
-record SortedPrices(double prices, int index){}
+record SortedPrices(double prices, int index) {
+}
