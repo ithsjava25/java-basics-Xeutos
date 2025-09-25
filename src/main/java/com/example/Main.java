@@ -2,6 +2,7 @@ package com.example;
 
 import com.example.api.ElpriserAPI;
 
+import java.text.NumberFormat;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
@@ -23,8 +24,7 @@ public class Main {
         ElpriserAPI.Prisklass zone = parseZone(args);
         LocalDate date = parseDate(args);
         List<ElpriserAPI.Elpris> todayPrices = api.getPriser(date, zone);
-        List<ElpriserAPI.Elpris> tomorrowPrices = parseTomorrowPrices(api, zone);
-
+        List<ElpriserAPI.Elpris> tomorrowPrices = api.getPriser(date.plusDays(1), zone);
 
         if (args.length == EMPTY) {
             printHelp();
@@ -40,11 +40,11 @@ public class Main {
 
         for (String arg : args){
             if (arg.equals("--sorted")){
-
+                sortedPrices(todayPrices, tomorrowPrices);
             }
         }
 
-        parseCharging(args, todayPrices);
+        parseCharging(args, todayPrices, tomorrowPrices);
 
         if (printPrices) {
             if (todayPrices.isEmpty()){
@@ -53,8 +53,6 @@ public class Main {
             } else
                 printPrices(todayPrices);
         }
-
-        sortedPrices(todayPrices);
     }
 
     private static List<ElpriserAPI.Elpris> parseTomorrowPrices(ElpriserAPI api, ElpriserAPI.Prisklass zone) {
@@ -127,19 +125,27 @@ public class Main {
         return date;
     }
 
-    private static void parseCharging(String[] args, List<ElpriserAPI.Elpris> prices) {
+    private static void parseCharging(String[] args, List<ElpriserAPI.Elpris> prices, List<ElpriserAPI.Elpris> tomorrowPrices) {
         int validWindow = NOT_VALID;
         for (int i = 0; i < args.length; i++) {
-            if (args[i].equals("--charging")){
-                if (args[i+1].equals("2h")){optimalChargingWindow(prices, 2); validWindow = VALID;}
-                if (args[i+1].equals("4h")){optimalChargingWindow(prices, 4); validWindow = VALID;}
-                if (args[i+1].equals("8h")){optimalChargingWindow(prices, 8); validWindow = VALID;}
-                if (validWindow == 0)
+            if (args[i].equals("--charging")) {
+                if (args[i + 1].equals("2h")) {
+                    optimalChargingWindow(prices, tomorrowPrices, 2);
+                    validWindow = VALID;
+                }
+                if (args[i + 1].equals("4h")) {
+                    optimalChargingWindow(prices, tomorrowPrices, 4);
+                    validWindow = VALID;
+                }
+                if (args[i + 1].equals("8h")) {
+                    optimalChargingWindow(prices, tomorrowPrices, 8);
+                    validWindow = VALID;
+                }
+                if (validWindow == NOT_VALID) {
                     System.out.println("Invalid charging window");
+                }
             }
         }
-        if (validWindow == VALID)
-            printChargingWindow();
     }
 
     private static double meanPrice(List<ElpriserAPI.Elpris> prices) {
@@ -167,6 +173,7 @@ public class Main {
             }
         }
         return index;
+        //todo handle hourly max when api is updated for every quarter hour. on 1/10/25
     }
 
     private static int leastExpensiveHour(List<ElpriserAPI.Elpris> prices) {
@@ -186,46 +193,83 @@ public class Main {
             }
         }
         return index;
+        //todo handle hourly min when api is updated for every quarter hour. on 1/10/25
     }
 
-    private static void sortedPrices(List<ElpriserAPI.Elpris> prices) {
+    private static void sortedPrices(List<ElpriserAPI.Elpris> prices, List<ElpriserAPI.Elpris> tomorrowPrices ) {
 
-        SortedPrices[] sortedPrices = new SortedPrices[prices.size()];
+        SortedPrices[] sortedPrices;
+        if (tomorrowPrices.isEmpty()) {
+            sortedPrices = new SortedPrices[prices.size()];
+        } else {
+            sortedPrices = new SortedPrices[prices.size()*2];
+            for (int i = 0; i < tomorrowPrices.size(); i++) {
+                double price = tomorrowPrices.get(i).sekPerKWh();
+                sortedPrices[i+prices.size()]= new SortedPrices(price, i);
+            }
+        }
+
 
         for (int i = 0; i < prices.size(); i++) {
             double price = prices.get(i).sekPerKWh();
             sortedPrices[i]= new SortedPrices(price, i);
         }
 
-        Comparator<SortedPrices> comparator = Comparator.comparing(SortedPrices::prices, Comparator.reverseOrder());
-        Arrays.sort(sortedPrices, comparator);
-        System.out.print("[");
-        printSortedPrices(prices, sortedPrices);
 
+        Comparator<SortedPrices> comparator = Comparator.comparing(SortedPrices::prices, Comparator.reverseOrder()).thenComparing(SortedPrices::index);
+        Arrays.sort(sortedPrices, comparator);
+        printSortedPrices(prices, sortedPrices);
 
         //todo: figure out how to keep index so print can include corresponding time instead of just prices.
     }
 
-    private static int optimalChargingWindow(List<ElpriserAPI.Elpris> prices, int duration) {
-        double[] array =  new double[prices.size()];
-        int index = prices.size();
+    private static void optimalChargingWindow(List<ElpriserAPI.Elpris> prices, List<ElpriserAPI.Elpris> tomorrowPrices, int duration) {
+         if (prices.isEmpty()) {
+            System.out.println("no data");
+            return;
+         }
+
+        double[] array =  new double[prices.size()*2];
+         int size = prices.size();
+        int index = prices.size()*2-1;
+        int priceIndex = 0;
 
         for (int i = 0; i < prices.size(); i++) {
-            array[i] = prices.get(i).sekPerKWh()*100;
-        }
+            array[i] = prices.get(i).sekPerKWh();
+        }   
 
-        int optimalChargingWindow = 0;
+        if (tomorrowPrices.isEmpty()) {
+            for (int i = 0; i < size ; i++) {
+                array[i+size] = 100;
+            }
+        } else {
+            for (int i = 0; i < size ; i++) {
+                array[i+size] = tomorrowPrices.get(i).sekPerKWh();
+            }
+        }
+        
+
+        double minSum = 0;
         for (int i = 0; i < duration; i++) {
-            optimalChargingWindow += (int) array[i];
+            minSum += array[i];
         }
 
-        int currentChargingWindow = optimalChargingWindow;
-        for (int i = duration; i < index; i++) {
-            currentChargingWindow += (int) (array[i] - array[index - duration]);
-            optimalChargingWindow = Math.max(optimalChargingWindow, currentChargingWindow);
+        double windowSum = minSum;
+        for (int i = 1; i < index; i++) {
+            windowSum += array[i+duration-1] - array[i - 1];
+
+            if (minSum > windowSum){
+                minSum = windowSum;
+                priceIndex++;
+            }
         }
 
-        return optimalChargingWindow;
+        minSum = minSum / duration;
+        minSum = minSum * 1000;
+        minSum = Math.round(minSum);
+        minSum = minSum / 10;
+        printChargingWindow(prices, priceIndex, minSum);
+
         //todo: figure out how to how to apply to finding optimal charging window.
     }
 
@@ -234,22 +278,12 @@ public class Main {
             int index = sortedPrices[i].index();
             int start = prices.get(index).timeStart().getHour();
             int end = prices.get(index).timeEnd().getHour();
-            int lineBreak = i+1;
             String stringFormat = String.format("%02d-%02d", start, end);
 
-            System.out.printf("%s %2.2f öre",
+            System.out.printf("%s %2.2f öre\n",
                     stringFormat,
                     sortedPrices[i].prices()*100);
-
-            if (i < sortedPrices.length - 1) {
-                System.out.print(", \n");
-            }
-//            if (lineBreak %4 == 0 && i < sortedPrices.length - 1) {
-//                System.out.println();
-//            }
         }
-        System.out.print("]");
-        System.out.println();
     }
 
     private static void printHelp(){
@@ -276,8 +310,9 @@ public class Main {
         System.out.printf("Medelpris: %.2f öre/kwh\n", meanPrice(prices)*100);
     }
 
-    private static void printChargingWindow(){
-
+    private static void printChargingWindow(List<ElpriserAPI.Elpris> prices, int index, double meanPrice) {
+        System.out.println("Påbörja laddning: "+ prices.get(index).timeStart().toLocalTime());
+        System.out.printf("Medelpris: %2.1f", meanPrice);
     }
     
     private static String timeFormat(int start, int end){
