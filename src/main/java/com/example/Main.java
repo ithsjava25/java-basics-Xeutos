@@ -55,18 +55,6 @@ public class Main {
         }
     }
 
-    private static List<ElpriserAPI.Elpris> parseTomorrowPrices(ElpriserAPI api, ElpriserAPI.Prisklass zone) {
-        LocalTime now = LocalTime.now();
-        LocalTime cutoff = LocalTime.of(13, 0);
-
-        if (now.isBefore(cutoff)) {
-            LocalDate today = LocalDate.now();
-            LocalDate tomorrow = today.plusDays(1);
-            return api.getPriser(tomorrow, zone);
-        }
-        return null;
-    }
-
     private static ElpriserAPI.Prisklass parseZone(String[] args) {
         ElpriserAPI.Prisklass zone = ElpriserAPI.Prisklass.SE1;
         int missingZone = NOT_VALID;
